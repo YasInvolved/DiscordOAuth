@@ -1,0 +1,14 @@
+services:
+  discord-oauth-server:
+    image: ghcr.io/yasinvolved/discordoauth:latest
+    container_name: DiscordOAuthServer
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - "DISCORD_CLIENT_ID=1527073475481567242"
+      - "DISCORD_CLIENT_SECRET=NqcdvLv47DPMQ5V4P00K5_ovtm1CetT8"
+      - "SERVER_ADDRESS=0.0.0.0"
+      - "REDIRECT_URL=http://localhost:3000/callback"
+    volumes:
+      - ./data:/app/data

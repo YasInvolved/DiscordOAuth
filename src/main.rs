@@ -156,7 +156,7 @@ async fn main() {
         redirect_url: std::env::var("REDIRECT_URL").expect("REDIRECT_URL must be set")
     };
 
-    let db_url = format!("sqlite://{}?mode=rwc", db_path);
+    let db_url = format!("sqlite://{}?mode=rwc&journal_mode=wal", db_path);
     let db: DatabaseConnection = Database::connect(db_url)
         .await.expect("Failed to connect to SQLite database");
 
