@@ -36,6 +36,7 @@ impl MigrationTrait for Migration {
 
 #[derive(DeriveIden)]
 enum VerifiedUser {
+    #[sea_orm(iden = "verified_user")]
     Table,
     Uuid,
     DiscordId

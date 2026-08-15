@@ -9,7 +9,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::{eprintln, sync::Arc};
 
-// use crate::db;
 use crate::entity::verified_users::Entity as VerifiedUser;
 use crate::state::ServerState;
 

@@ -40,12 +40,6 @@ impl ServerState {
 
         Migrator::up(&db, None).await.map_err(|e| DbErr::Custom(e.to_string()))?;
 
-        // let builder = db.get_database_backend();
-        // let schema = Schema::new(builder);
-        // let create_table_stmt = schema.create_table_from_entity(VerifiedUsers);
-    
-        // db.execute(builder.build(&create_table_stmt)).await?;
-
         let state = Self {
             config,
             client: Client::new(),
