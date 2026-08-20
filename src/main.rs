@@ -2,6 +2,7 @@ mod entity;
 mod state;
 mod routes;
 mod db;
+mod crypto;
 
 use state::{ServerConfig, ServerState};
 
