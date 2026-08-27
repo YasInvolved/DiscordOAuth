@@ -1,32 +1,42 @@
 mod entity;
-mod state;
-mod routes;
-mod db;
+mod config;
 mod crypto;
+mod handlers;
 
-use state::{ServerConfig, ServerState};
+use tokio::net::TcpListener;
+use sea_orm::Database;
 
-use std::fs;
-use std::path::Path;
+use crate::{
+    config::{ServerConfig, SharedServerState, create_state}, 
+    handlers::{build_router, callback::start_token_refresh_task}
+};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
+    let config = ServerConfig::from_env();
 
-    let db_path = std::env::var("DATABASE_PATH").unwrap_or_else(|_| "data/auth.db".to_string());
-    if let Some(parent) = Path::new(&db_path).parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).expect("Failed to create database directory");
-        }
-    }
+    let db_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite://data/auth.db?mode=rwc".to_string());
 
-    let config = ServerConfig::initialize();
-    let server_full_addr = format!("{}:3000", config.server_address);
+    println!("Connecting to database...");
+    let db = Database::connect(&db_url).await.expect("Failed to connect to the database.");
 
-    let server_state = ServerState::new(config).await.expect("Failed to initialize shared server state");
-    let app = routes::build_router(server_state.clone());
-    
-    let listener = tokio::net::TcpListener::bind(server_full_addr).await.unwrap();
-    println!("Server listening on http://{}:3000", server_state.config.server_address);
-    axum::serve(listener, app).await.unwrap();
+    println!("Running pending migrations...");
+    // Migrator::up(db, steps)
+
+    let shared_state: SharedServerState = create_state(db, config);
+
+    tokio::spawn(start_token_refresh_task(shared_state.clone()));
+
+    let app = build_router(&shared_state);
+
+    let port = "3000";
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await
+        .expect(&format!("Failed to start TCP listener on port {}", port).to_string());
+
+    println!("Server running on port {}", port);
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }
