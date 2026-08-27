@@ -1,6 +1,8 @@
+use std::net::SocketAddr;
+
 use axum::{
-    extract::{Query, State},
-    http::StatusCode,
+    extract::{ConnectInfo, Query, State},
+    http::{StatusCode, HeaderMap},
     response::IntoResponse
 };
 use chrono::{Duration, Utc};
@@ -9,7 +11,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Quer
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{config::SharedServerState, crypto::{encrypt_token, decrypt_token}, entity::{oauth_states, oauth_tokens, users}};
+use crate::{config::SharedServerState, crypto::{decrypt_token, encrypt_token}, entity::{oauth_states, oauth_tokens, users}, handlers::utils::log_endpoint};
 
 #[derive(Deserialize)]
 pub struct CallbackQuery {
@@ -30,9 +32,13 @@ struct DiscordUserResponse {
 }
 
 pub async fn callback_handler(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     State(state): State<SharedServerState>,
     Query(query): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    log_endpoint("GET", "/callback", addr, headers);
+
     let state_uuid = Uuid::parse_str(&query.state)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid state UUID".into()))?;
 

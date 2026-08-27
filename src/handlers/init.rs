@@ -1,6 +1,8 @@
+use std::net::SocketAddr;
+
 use axum::{
-    extract::{Json, State},
-    http::StatusCode
+    extract::{ConnectInfo, Json, State},
+    http::{StatusCode, HeaderMap}
 };
 
 use chrono::{Duration, Utc};
@@ -8,7 +10,7 @@ use sea_orm::{ActiveModelTrait, Set};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{SharedServerState, entity::oauth_states};
+use crate::{SharedServerState, entity::oauth_states, handlers::utils::log_endpoint};
 
 #[derive(Deserialize)]
 pub struct InitRequest {
@@ -21,9 +23,13 @@ pub struct InitResponse {
 }
 
 pub async fn init_auth_handler(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     State(state): State<SharedServerState>,
     Json(payload): Json<InitRequest>
 ) -> Result<Json<InitResponse>, StatusCode> {
+    log_endpoint("POST", "/init", addr, headers);
+
     let state_id = Uuid::new_v4();
     let expires_at = Utc::now() + Duration::minutes(15);
 

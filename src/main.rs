@@ -3,6 +3,8 @@ mod config;
 mod crypto;
 mod handlers;
 
+use std::net::SocketAddr;
+
 use tokio::net::TcpListener;
 use sea_orm::Database;
 
@@ -36,7 +38,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect(&format!("Failed to start TCP listener on port {}", port).to_string());
 
     println!("Server running on port {}", port);
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener, 
+        app.into_make_service_with_connect_info::<SocketAddr>()
+    ).await?;
 
     Ok(())
 }
