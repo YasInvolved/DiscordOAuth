@@ -1,4 +1,12 @@
-use crate::{config::SharedServerState, handlers::{callback::callback_handler, init::init_auth_handler}};
+use crate::{
+    config::SharedServerState, 
+    handlers::{
+        callback::callback_handler, 
+        init::init_auth_handler,
+        player::player_handler
+    }
+};
+
 use axum::{
     Router, 
     routing::{get, post}
@@ -7,11 +15,13 @@ use axum::{
 mod utils;
 pub mod init;
 pub mod callback;
+mod player;
 
 pub fn build_router(state: &SharedServerState) -> Router {
     Router::new()
         .route("/health", get(|| async { "API is running" }))
         .route("/init", post(init_auth_handler))
         .route("/callback", get(callback_handler))
+        .route("/player/{uuid}", get(player_handler))
         .with_state(state.clone())
 }
