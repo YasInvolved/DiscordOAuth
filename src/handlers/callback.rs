@@ -11,24 +11,18 @@ use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Quer
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{config::SharedServerState, crypto::{decrypt_token, encrypt_token}, discord::user::DiscordUser, entity::{oauth_states, oauth_tokens, users}, handlers::utils::log_endpoint};
+use crate::{
+    config::SharedServerState, 
+    crypto::{decrypt_token, encrypt_token}, 
+    discord::{oauth2::{exchange_token, refresh_token}, user::DiscordUser}, 
+    entity::{oauth_states, oauth_tokens, users}, 
+    handlers::utils::log_endpoint
+};
 
 #[derive(Deserialize)]
 pub struct CallbackQuery {
     pub code: String,
     pub state: String
-}
-
-#[derive(Deserialize)]
-struct DiscordTokenResponse {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_in: i64
-}
-
-#[derive(Deserialize)]
-struct DiscordUserResponse {
-    pub id: String
 }
 
 #[derive(Serialize)]
@@ -62,22 +56,21 @@ pub async fn callback_handler(
         return Err((StatusCode::BAD_REQUEST, "State has expired".into()));
     }
 
+    let discord_config = &state.config.discord;
     let http_client = &state.http_client;
-    let token_res = http_client
-        .post("https://discord.com/api/v10/oauth2/token")
-        .form(&[
-            ("client_id", config.discord.client_id.as_str()),
-            ("client_secret", config.discord.client_secret.as_str()),
-            ("grant_type", "authorization_code"),
-            ("code", query.code.as_str()),
-            ("redirect_uri", config.discord.redirect_uri.as_str())
-        ])
-        .send()
-        .await
-        .map_err(|_| (StatusCode::BAD_GATEWAY, "Failed to reach Discord".into()))?
-        .json::<DiscordTokenResponse>()
-        .await
-        .map_err(|_| (StatusCode::BAD_GATEWAY, "Failed parsing Discord tokens".into()))?;
+    let token_res = match exchange_token(
+        http_client, 
+        &discord_config.client_id, 
+        &discord_config.client_secret, 
+        &query.code, 
+        &discord_config.redirect_uri
+    ).await {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Discord token exchange failed: {}", e);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to exchange Discord token".into()))?
+        }
+    };
 
 
     let user_res = match DiscordUser::fetch(&state.discord, &token_res.access_token).await {
@@ -145,9 +138,9 @@ pub async fn callback_handler(
 pub async fn start_token_refresh_task(state: SharedServerState) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
     let client = reqwest::Client::new();
-    let config = &state.config;
+    let config = &state.config.discord;
 
-    let key_bytes: [u8; 32] = match config.discord.aes_key.as_bytes().try_into() {
+    let key_bytes: [u8; 32] = match config.aes_key.as_bytes().try_into() {
         Ok(k) => k,
         Err(_) => {
             eprintln!("Invalid AES key for background refresher. Task exiting");
@@ -172,7 +165,7 @@ pub async fn start_token_refresh_task(state: SharedServerState) {
         };
 
         for token_record in expiring_tokens {
-            let refresh_token = match decrypt_token(&token_record.refresh_token, &key_bytes) {
+            let token = match decrypt_token(&token_record.refresh_token, &key_bytes) {
                 Ok(t) => t,
                 Err(err) => {
                     eprintln!("Failed to decrypt token for record {}: {err}", token_record.id);
@@ -180,35 +173,29 @@ pub async fn start_token_refresh_task(state: SharedServerState) {
                 }
             };
 
-            let res = client
-                .post("https://discord.com/api/v10/oauth2/token")
-                .form(&[
-                    ("client_id", config.discord.client_id.as_str()),
-                    ("client_secret", config.discord.client_secret.as_str()),
-                    ("grant_type", "refresh_token"),
-                    ("refresh_token", refresh_token.as_str())
-                ])
-                .send()
-                .await;
+            let res= refresh_token(
+                &client, 
+                &config.client_id, 
+                &config.client_secret, 
+                &token
+            ).await;
 
             let response = match res {
-                Ok(r) if r.status().is_success() => r,
+                Ok(r) => r,
                 _ => {
                     eprintln!("Failed refreshing token for record {}", token_record.id);
                     continue;
                 }
             };
 
-            if let Ok(new_data) = response.json::<DiscordTokenResponse>().await {
-                if let Ok(new_encrypted_refresh) = encrypt_token(&new_data.refresh_token, &key_bytes) {
-                    let mut active_token: oauth_tokens::ActiveModel = token_record.into();
-                    active_token.access_token = Set(new_data.access_token);
-                    active_token.refresh_token = Set(new_encrypted_refresh);
-                    active_token.expires_at = Set(Utc::now() + Duration::seconds(new_data.expires_in));
+            if let Ok(new_encrypted_refresh) = encrypt_token(&response.refresh_token, &key_bytes) {
+                let mut active_token: oauth_tokens::ActiveModel = token_record.into();
+                active_token.access_token = Set(response.access_token);
+                active_token.refresh_token = Set(new_encrypted_refresh);
+                active_token.expires_at = Set(Utc::now() + Duration::seconds(response.expires_in));
 
-                    if let Err(e) = active_token.update(&state.db).await {
-                        eprintln!("Failed updating refreshed token in DB: {e}");
-                    }
+                if let Err(e) = active_token.update(&state.db).await {
+                    eprintln!("Failed updating refreshed token in DB: {e}");
                 }
             }
         }

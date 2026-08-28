@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse
 };
 use reqwest::StatusCode;
-use sea_orm::{ColumnTrait, EntityTrait, ModelTrait, QueryFilter};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
 
 use crate::{
@@ -68,14 +68,14 @@ pub async fn player_unlink_handler(
         .require_one(&state.db)
         .await {
             Ok(u) => u,
-            Err(e) => {
+            Err(_) => {
                 eprintln!("Lookup failed. User doesn't exist or has a duplicate");
                 return Err((StatusCode::NOT_FOUND, "User doesn't exist".into()))
             }
         };
 
     let http_client = &state.http_client;
-    revoke_token(
+    let _ = revoke_token(
         http_client, 
         &state.config.discord.client_id, 
         &state.config.discord.client_secret, 
