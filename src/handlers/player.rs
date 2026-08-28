@@ -25,7 +25,7 @@ pub async fn player_handler(
     Path(minecraft_uuid): Path<String>
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let auth_header = headers.get("Authorization").and_then(|h| h.to_str().ok());
-    let expected_auth = format!("Bearer {}", state.config.minecraft_webhook_secret);
+    let expected_auth = format!("Bearer {}", state.config.minecraft.webhook_secret);
 
     if auth_header != Some(&expected_auth) {
         return Err((StatusCode::UNAUTHORIZED, "Invalid authentication string".into()));

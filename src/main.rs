@@ -17,13 +17,10 @@ use crate::{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
-    let config = ServerConfig::from_env();
-
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite://data/auth.db?mode=rwc".to_string());
+    let config = ServerConfig::load().expect("Failed to load config.");
 
     println!("Connecting to database...");
-    let db = Database::connect(&db_url).await.expect("Failed to connect to the database.");
+    let db = Database::connect(&config.database.url).await.expect("Failed to connect to the database.");
 
     println!("Running pending migrations...");
     Migrator::up(&db, None).await?;

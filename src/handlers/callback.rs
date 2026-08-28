@@ -46,6 +46,8 @@ pub async fn callback_handler(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     log_endpoint("GET", "/callback", addr, headers);
 
+    let config = &state.config;
+
     let state_uuid = Uuid::parse_str(&query.state)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid state UUID".into()))?;
 
@@ -64,11 +66,11 @@ pub async fn callback_handler(
     let token_res = http_client
         .post("https://discord.com/api/v10/oauth2/token")
         .form(&[
-            ("client_id", state.config.discord_client_id.as_str()),
-            ("client_secret", state.config.discord_client_secret.as_str()),
+            ("client_id", config.discord.client_id.as_str()),
+            ("client_secret", config.discord.client_secret.as_str()),
             ("grant_type", "authorization_code"),
             ("code", query.code.as_str()),
-            ("redirect_uri", state.config.discord_redirect_url.as_str())
+            ("redirect_uri", config.discord.redirect_uri.as_str())
         ])
         .send()
         .await
@@ -87,7 +89,7 @@ pub async fn callback_handler(
             .await
             .map_err(|_| (StatusCode::BAD_GATEWAY, "Failed parsing user data".into()))?;
 
-    let key_bytes: [u8; 32] = state.config.aes_key.as_bytes().try_into()
+    let key_bytes: [u8; 32] = config.discord.aes_key.as_bytes().try_into()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid AES key".into()))?;
 
     let encrypted_refresh = encrypt_token(&token_res.refresh_token, &key_bytes)
@@ -144,8 +146,9 @@ pub async fn callback_handler(
 pub async fn start_token_refresh_task(state: SharedServerState) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
     let client = reqwest::Client::new();
+    let config = &state.config;
 
-    let key_bytes: [u8; 32] = match state.config.aes_key.as_bytes().try_into() {
+    let key_bytes: [u8; 32] = match config.discord.aes_key.as_bytes().try_into() {
         Ok(k) => k,
         Err(_) => {
             eprintln!("Invalid AES key for background refresher. Task exiting");
@@ -181,8 +184,8 @@ pub async fn start_token_refresh_task(state: SharedServerState) {
             let res = client
                 .post("https://discord.com/api/v10/oauth2/token")
                 .form(&[
-                    ("client_id", state.config.discord_client_id.as_str()),
-                    ("client_secret", state.config.discord_client_secret.as_str()),
+                    ("client_id", config.discord.client_id.as_str()),
+                    ("client_secret", config.discord.client_secret.as_str()),
                     ("grant_type", "refresh_token"),
                     ("refresh_token", refresh_token.as_str())
                 ])
@@ -221,8 +224,8 @@ async fn notify_server(minecraft_uuid: &str, user_id: &str, state: &SharedServer
         event: "link_complete".to_string()
     };
 
-    let res = client.post(&state.config.minecraft_webhook_url)
-        .bearer_auth(&state.config.minecraft_webhook_secret)
+    let res = client.post(&state.config.minecraft.webhook_url)
+        .bearer_auth(&state.config.minecraft.webhook_secret)
         .json(&payload)
         .send()
         .await;

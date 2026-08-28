@@ -1,4 +1,5 @@
 .env
+config.toml
 /data
 /target
 /migration/target

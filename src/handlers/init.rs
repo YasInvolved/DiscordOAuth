@@ -44,9 +44,9 @@ pub async fn init_auth_handler(
     new_state.insert(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let auth_url = format!(
-        "https://discord.com/oauth2/authorize?client_id={}&response_type=code&redirect_uri={}&scope=identify&state={}",
-        urlencoding::encode(&state.config.discord_client_id),
-        urlencoding::encode(&state.config.discord_redirect_url),
+        "https://discord.com/oauth2/authorize?client_id={}&response_type=code&redirect_uri={}&scope=identify+guilds&state={}",
+        urlencoding::encode(&state.config.discord.client_id),
+        urlencoding::encode(&state.config.discord.redirect_uri),
         urlencoding::encode(&state_id.to_string())
     );
 

@@ -1,26 +1,42 @@
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use serde::Deserialize;
 
-#[derive(Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ServerConfig {
-    pub discord_client_id: String,
-    pub discord_client_secret: String,
-    pub discord_redirect_url: String,
+    pub database: DatabaseConfig,
+    pub discord: DiscordConfig,
+    pub minecraft: MinecraftConfig
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct DatabaseConfig {
+    pub url: String
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct DiscordConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    pub redirect_uri: String,
     pub aes_key: String,
-    pub minecraft_webhook_url: String,
-    pub minecraft_webhook_secret: String
+    pub required_guild_id: Option<String>
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct MinecraftConfig {
+    pub webhook_url: String,
+    pub webhook_secret: String
 }
 
 impl ServerConfig {
-    pub fn from_env() -> Self {
-        Self {
-            discord_client_id: std::env::var("DISCORD_CLIENT_ID").expect("DISCORD_CLIENT_ID must be set"),
-            discord_client_secret: std::env::var("DISCORD_CLIENT_SECRET").expect("DISCORD_CLIENT_SECRET must be set"),
-            discord_redirect_url: std::env::var("DISCORD_REDIRECT_URL").expect("DISCORD_REDIRECT_URL must be set"),
-            aes_key: std::env::var("AES_KEY").expect("AES_KEY must be set"),
-            minecraft_webhook_url: std::env::var("MINECRAFT_WEBHOOK_URL").expect("MINECRAFT_WEBHOOK_URL must be set"),
-            minecraft_webhook_secret: std::env::var("MINECRAFT_WEBHOOK_SECRET").expect("MINECRAFT_WEBHOOK_SECRET must be set")
-        }
+    pub fn load() -> Result<Self, config::ConfigError> {
+        let config = config::Config::builder()
+            .add_source(config::File::with_name("config.toml").required(false))
+            .add_source(config::Environment::with_prefix("OAUTH").separator("__"))
+            .build()?;
+
+        config.try_deserialize()
     }
 }
 
