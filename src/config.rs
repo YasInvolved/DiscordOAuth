@@ -2,6 +2,8 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use serde::Deserialize;
 
+use crate::discord::client::DiscordClient;
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServerConfig {
     pub database: DatabaseConfig,
@@ -19,8 +21,7 @@ pub struct DiscordConfig {
     pub client_id: String,
     pub client_secret: String,
     pub redirect_uri: String,
-    pub aes_key: String,
-    pub required_guild_id: Option<String>
+    pub aes_key: String
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -43,6 +44,7 @@ impl ServerConfig {
 pub struct ServerState {
     pub db: DatabaseConnection,
     pub http_client: reqwest::Client,
+    pub discord: DiscordClient,
     pub config: ServerConfig
 }
 
@@ -50,5 +52,6 @@ pub type SharedServerState = Arc<ServerState>;
 
 pub fn create_state(db: DatabaseConnection, config: ServerConfig) -> SharedServerState {
     let http_client = reqwest::Client::new();
-    Arc::new(ServerState { db, http_client, config })
+    let discord = DiscordClient::new();
+    Arc::new(ServerState { db, http_client, discord, config })
 }

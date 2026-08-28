@@ -11,7 +11,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Quer
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{config::SharedServerState, crypto::{decrypt_token, encrypt_token}, entity::{oauth_states, oauth_tokens, users}, handlers::utils::log_endpoint};
+use crate::{config::SharedServerState, crypto::{decrypt_token, encrypt_token}, discord::user::DiscordUser, entity::{oauth_states, oauth_tokens, users}, handlers::utils::log_endpoint};
 
 #[derive(Deserialize)]
 pub struct CallbackQuery {
@@ -79,15 +79,14 @@ pub async fn callback_handler(
         .await
         .map_err(|_| (StatusCode::BAD_GATEWAY, "Failed parsing Discord tokens".into()))?;
 
-    let user_res = http_client
-            .get("https://discord.com/api/v10/users/@me")
-            .bearer_auth(&token_res.access_token)
-            .send()
-            .await
-            .map_err(|_| (StatusCode::BAD_GATEWAY, "Failed to fetch user data".into()))?
-            .json::<DiscordUserResponse>()
-            .await
-            .map_err(|_| (StatusCode::BAD_GATEWAY, "Failed parsing user data".into()))?;
+
+    let user_res = match DiscordUser::fetch(&state.discord, &token_res.access_token).await {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Failed to fetch user: {}", e.to_string());
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch user. Try again.".into()));
+        }
+    };
 
     let key_bytes: [u8; 32] = config.discord.aes_key.as_bytes().try_into()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid AES key".into()))?;

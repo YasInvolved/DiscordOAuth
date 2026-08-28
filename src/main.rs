@@ -2,6 +2,7 @@ mod entity;
 mod config;
 mod crypto;
 mod handlers;
+mod discord;
 
 use std::net::SocketAddr;
 
