@@ -8,7 +8,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
 
 use crate::{
-    config::SharedServerState, discord::oauth2::revoke_token, entity::{oauth_tokens, users}
+    config::SharedServerState, discord::{guild::DiscordGuild, oauth2::revoke_token}, entity::{oauth_tokens, users}
 };
 
 #[derive(Serialize)]
@@ -16,6 +16,13 @@ struct PlayerResponse {
     pub user_id: String,
     pub minecraft_id: String,
     pub discord_id: String
+}
+
+#[derive(Serialize)]
+struct MemberResponse {
+    pub is_member: bool,
+    pub is_pending: bool,
+    pub nickname: Option<String>
 }
 
 pub async fn player_handler(
@@ -91,6 +98,48 @@ pub async fn player_unlink_handler(
         Err(err) => {
             eprintln!("Failed to delete token/user from database: {err}");
             Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to delete user from database".into()))
+        }
+    }
+}
+
+pub async fn player_guild_handler(
+    State(state): State<SharedServerState>,
+    headers: HeaderMap,
+    Path((minecraft_uuid, guild_id)): Path<(String, String)>
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let auth_header = headers.get("Authorization").and_then(|h| h.to_str().ok());
+    let expected_auth = format!("Bearer {}", state.config.minecraft.webhook_secret);
+
+    if auth_header != Some(&expected_auth) {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid authentication string".into()));
+    }
+
+    let linked_user = match users::Entity::find()
+        .filter(users::Column::MinecraftUuid.eq(minecraft_uuid))
+        .find_both_related(oauth_tokens::Entity)
+        .require_one(&state.db)
+        .await {
+            Ok(u) => u,
+            Err(_) => {
+                eprintln!("Lookup failed. User doesn't exist or has a duplicate");
+                return Err((StatusCode::NOT_FOUND, "User doesn't exist".into()))
+            }
+        };
+
+    let member_result = DiscordGuild::get_membership_of_id(&state.discord, &linked_user.1.access_token, &guild_id).await;
+
+    match member_result {
+        Ok(member) => {
+            let res = MemberResponse{
+                is_member: true,
+                is_pending: member.pending.unwrap_or(false),
+                nickname: member.nick
+            };
+            
+            return Ok((StatusCode::OK, Json(res)));
+        },
+        Err(_) => {
+            return Err((StatusCode::NOT_FOUND, "User is not a member of this guild".into()));
         }
     }
 }

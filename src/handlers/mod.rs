@@ -1,6 +1,6 @@
 use crate::{
     config::SharedServerState, handlers::{
-        callback::callback_handler, init::init_auth_handler, player::{player_handler, player_unlink_handler}
+        callback::callback_handler, init::init_auth_handler, player::{player_guild_handler, player_handler, player_unlink_handler}
     }
 };
 
@@ -21,6 +21,6 @@ pub fn build_router(state: &SharedServerState) -> Router {
         .route("/callback", get(callback_handler))
         .route("/player/{minecraft_uuid}", get(player_handler))
         .route("/player/{minecraft_uuid}/unlink", post(player_unlink_handler))
-        // .route("/player/{uuid}/{guild_id}", method_router)
+        .route("/player/{uuid}/{guild_id}", get(player_guild_handler))
         .with_state(state.clone())
 }
