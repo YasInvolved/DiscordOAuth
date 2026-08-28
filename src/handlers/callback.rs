@@ -8,7 +8,7 @@ use axum::{
 use chrono::{Duration, Utc};
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{config::SharedServerState, crypto::{decrypt_token, encrypt_token}, entity::{oauth_states, oauth_tokens, users}, handlers::utils::log_endpoint};
@@ -29,6 +29,13 @@ struct DiscordTokenResponse {
 #[derive(Deserialize)]
 struct DiscordUserResponse {
     pub id: String
+}
+
+#[derive(Serialize)]
+struct WebhookNotification {
+    minecraft_uuid: String,
+    user_id: String,
+    event: String
 }
 
 pub async fn callback_handler(
@@ -96,7 +103,7 @@ pub async fn callback_handler(
 
     let user_id = if let Some(user) = existing_user {
         let mut user_active: users::ActiveModel = user.into();
-        user_active.minecraft_uuid = Set(Some(state_record.minecraft_uuid));
+        user_active.minecraft_uuid = Set(Some(state_record.minecraft_uuid.clone()));
         let updated = user_active.update(&state.db).await
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed updating user".into()))?;
         updated.id
@@ -104,7 +111,7 @@ pub async fn callback_handler(
         let new_user = users::ActiveModel {
             id: Set(Uuid::new_v4()),
             discord_id: Set(user_res.id),
-            minecraft_uuid: Set(Some(state_record.minecraft_uuid))
+            minecraft_uuid: Set(Some(state_record.minecraft_uuid.clone()))
         };
 
         let created = new_user.insert(&state.db).await
@@ -129,6 +136,8 @@ pub async fn callback_handler(
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed saving tokens".into()))?;
 
     let _ = oauth_states::Entity::delete_by_id(state_uuid).exec(&state.db).await;
+    notify_server(&state_record.minecraft_uuid, &user_id.to_string(), &state).await;
+
     Ok("Successfully linked your Minecraft account with Discord! You can close this tab now.")
 }
 
@@ -201,5 +210,24 @@ pub async fn start_token_refresh_task(state: SharedServerState) {
                 }
             }
         }
+    }
+}
+
+async fn notify_server(minecraft_uuid: &str, user_id: &str, state: &SharedServerState) {
+    let client = &state.http_client;
+    let payload = WebhookNotification{
+        minecraft_uuid: minecraft_uuid.to_string(),
+        user_id: user_id.to_string(),
+        event: "link_complete".to_string()
+    };
+
+    let res = client.post(&state.config.minecraft_webhook_url)
+        .bearer_auth(&state.config.minecraft_webhook_secret)
+        .json(&payload)
+        .send()
+        .await;
+
+    if let Err(e) = res {
+        eprintln!("Failed to notify Minecraft server for UUID {}: {}", minecraft_uuid, e);
     }
 }

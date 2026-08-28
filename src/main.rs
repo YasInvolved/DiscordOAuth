@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 
 use tokio::net::TcpListener;
 use sea_orm::Database;
+use migration::{Migrator, MigratorTrait};
 
 use crate::{
     config::{ServerConfig, SharedServerState, create_state}, 
@@ -25,7 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Database::connect(&db_url).await.expect("Failed to connect to the database.");
 
     println!("Running pending migrations...");
-    // Migrator::up(db, steps)
+    Migrator::up(&db, None).await?;
+    println!("Migrations complete!");
 
     let shared_state: SharedServerState = create_state(db, config);
 

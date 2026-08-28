@@ -14,7 +14,8 @@ use crate::{SharedServerState, entity::oauth_states, handlers::utils::log_endpoi
 
 #[derive(Deserialize)]
 pub struct InitRequest {
-    pub minecraft_uuid: String
+    pub minecraft_uuid: String,
+    pub challenge_token: String
 }
 
 #[derive(Serialize)]
@@ -36,7 +37,8 @@ pub async fn init_auth_handler(
     let new_state = oauth_states::ActiveModel {
         state_id: Set(state_id.clone()),
         minecraft_uuid: Set(payload.minecraft_uuid),
-        expires_at: Set(expires_at)
+        expires_at: Set(expires_at),
+        challenge_token: Set(payload.challenge_token)
     };
 
     new_state.insert(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

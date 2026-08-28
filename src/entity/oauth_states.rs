@@ -9,6 +9,7 @@ pub struct Model {
     pub state_id: Uuid,
     pub minecraft_uuid: String,
     pub expires_at: DateTimeUtc,
+    pub challenge_token: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
