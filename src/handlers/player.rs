@@ -22,7 +22,8 @@ struct PlayerResponse {
 struct MemberResponse {
     pub is_member: bool,
     pub is_pending: bool,
-    pub nickname: Option<String>
+    pub nickname: Option<String>,
+    pub roles: Vec<String>
 }
 
 pub async fn player_handler(
@@ -133,7 +134,8 @@ pub async fn player_guild_handler(
             let res = MemberResponse{
                 is_member: true,
                 is_pending: member.pending.unwrap_or(false),
-                nickname: member.nick
+                nickname: member.nick,
+                roles: member.roles
             };
             
             return Ok((StatusCode::OK, Json(res)));
