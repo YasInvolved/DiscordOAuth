@@ -8,12 +8,19 @@ use crate::discord::client::DiscordClient;
 pub struct ServerConfig {
     pub database: DatabaseConfig,
     pub discord: DiscordConfig,
-    pub minecraft: MinecraftConfig
+    pub minecraft: MinecraftConfig,
+    pub http: HttpConfig
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct DatabaseConfig {
     pub url: String
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct HttpConfig {
+    pub port: i16,
+    pub addr: String
 }
 
 #[derive(Debug, Deserialize, Clone)]
