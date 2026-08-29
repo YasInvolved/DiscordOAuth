@@ -2,45 +2,36 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce
 };
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use rand::{TryRng, rngs::SysRng};
-use std::env;
 
-fn get_cipher() -> Aes256Gcm {
-    let key_str = env::var("ENCRYPTION_KEY").expect("ENCRYPTION_KEY must be set");
-    let key_bytes = hex::decode(key_str).expect("Key must be a valid hex string");
-    
-    Aes256Gcm::new_from_slice(&key_bytes)
-        .expect("Invalid key length: ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars)")
-}
+use rand::{Rng, rngs::{StdRng}};
 
-pub fn encrypt_token(token: &str) -> String {
-    let cipher = get_cipher();
+pub fn encrypt_token(plain_text: &str, key_bytes: &[u8; 32]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    let cipher = Aes256Gcm::new_from_slice(key_bytes)?;
 
+    let mut rng: StdRng = rand::make_rng();
     let mut nonce_bytes = [0u8; 12];
-    SysRng.try_fill_bytes(&mut nonce_bytes).expect("Encryption Failure");
-    let nonce = Nonce::try_from(nonce_bytes).expect("Encryption Error");
+    rng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::try_from(nonce_bytes)?;
 
-    let ciphertext = cipher.encrypt(&nonce, token.as_bytes())
-        .expect("Encrytpion Error");
+    let ciphertext = cipher.encrypt(&nonce, plain_text.as_bytes())
+        .map_err(|e| format!("Encryption failure: {e}"))?;
 
-    let mut combined = nonce.to_vec();
-    combined.extend(ciphertext);
-
-    BASE64.encode(combined)
+    let mut payload = nonce_bytes.to_vec();
+    payload.extend(ciphertext);
+    Ok(payload)
 }
 
-pub fn decrypt_token(encrypted_base64: &str) -> String {
-    let cipher = get_cipher();
+pub fn decrypt_token(payload: &[u8], key_bytes: &[u8; 32]) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    if payload.len() < 12 {
+        return Err("Invalid payload length".into());
+    }
 
-    let combined = BASE64.decode(encrypted_base64)
-        .expect("Failed to decode Base64");
+    let cipher = Aes256Gcm::new_from_slice(key_bytes)?;
+    let (nonce_bytes, ciphertext) = payload.split_at(12);
+    let nonce = Nonce::try_from(nonce_bytes)?;
 
-    let (nonce_bytes, ciphertext) = combined.split_at(12);
-    let nonce = Nonce::try_from(nonce_bytes).expect("Decryption failure - failed to transform nonce bytes to object");
+    let decrypted_bytes = cipher.decrypt(&nonce, ciphertext)
+        .map_err(|e| format!("Decryption failure: {e}"))?;
 
-    let plaintext_bytes = cipher.decrypt(&nonce, ciphertext)
-        .expect("Decryption failure - invalid key or tampered data");
-
-    String::from_utf8(plaintext_bytes).unwrap()
+    Ok(String::from_utf8(decrypted_bytes)?)
 }

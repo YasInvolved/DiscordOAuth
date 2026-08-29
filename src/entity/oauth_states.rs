@@ -3,11 +3,13 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "verified_user")]
+#[sea_orm(table_name = "oauth_states")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub uuid: String,
-    pub discord_id: String,
+    pub state_id: Uuid,
+    pub minecraft_uuid: String,
+    pub expires_at: DateTimeUtc,
+    pub challenge_token: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
