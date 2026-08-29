@@ -1,8 +1,6 @@
-use std::net::SocketAddr;
-
 use axum::{
-    extract::{ConnectInfo, Query, State},
-    http::{StatusCode, HeaderMap},
+    extract::{Query, State},
+    http::{StatusCode},
     response::IntoResponse
 };
 use chrono::{Duration, Utc};
@@ -16,7 +14,6 @@ use crate::{
     crypto::{decrypt_token, encrypt_token}, 
     discord::{oauth2::{exchange_token, refresh_token}, user::DiscordUser}, 
     entity::{oauth_states, oauth_tokens, users}, 
-    handlers::utils::log_endpoint
 };
 
 #[derive(Deserialize)]
@@ -33,13 +30,9 @@ struct WebhookNotification {
 }
 
 pub async fn callback_handler(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
     State(state): State<SharedServerState>,
     Query(query): Query<CallbackQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    log_endpoint("GET", "/callback", addr, headers);
-
     let config = &state.config;
 
     let state_uuid = Uuid::parse_str(&query.state)
