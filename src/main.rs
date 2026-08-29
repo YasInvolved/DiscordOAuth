@@ -33,11 +33,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = build_router(&shared_state);
 
-    let port = "3000";
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await
-        .expect(&format!("Failed to start TCP listener on port {}", port).to_string());
+    let http_config = &shared_state.config.http;
+    let listener = TcpListener::bind(format!("{}:{}", http_config.addr, http_config.port)).await
+        .expect(&format!("Failed to start TCP listener on port {}", http_config.port).to_string());
 
-    println!("Server running on port {}", port);
+    println!("Server running at {}:{}", http_config.addr, http_config.port);
     axum::serve(
         listener, 
         app.into_make_service_with_connect_info::<SocketAddr>()
