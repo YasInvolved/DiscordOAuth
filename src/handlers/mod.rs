@@ -20,7 +20,7 @@ pub fn build_router(state: &SharedServerState) -> Router {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,sea_orm=warn,sqlx=warn".into())   
+                .unwrap_or_else(|_| "info,tower_http=debug,sea_orm=warn,sqlx=warn".into())   
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
